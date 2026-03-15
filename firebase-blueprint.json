@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "joined_date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "joined_date"]
+    },
+    "Toilet": {
+      "title": "Toilet",
+      "description": "Public toilet facility details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "cleanliness_rating": { "type": "number" },
+        "smell_rating": { "type": "number" },
+        "water_available": { "type": "boolean" },
+        "safety_rating": { "type": "number" },
+        "hygiene_score": { "type": "number" },
+        "photos": { "type": "array", "items": { "type": "string" } },
+        "comments": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name", "latitude", "longitude", "hygiene_score"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "User review for a toilet",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "toilet_id": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "toilet_id", "rating", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/toilets/{toiletId}": {
+      "schema": "Toilet",
+      "description": "Toilet facilities"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Toilet reviews"
+    }
+  }
+}

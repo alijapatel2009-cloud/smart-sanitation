@@ -1,0 +1,100 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // - id: string (required)
+    // - name: string (required)
+    // - email: string (required, email format)
+    // - joined_date: string (required, date-time)
+    //
+    // Collection: toilets
+    // - name: string (required)
+    // - latitude: number (required)
+    // - longitude: number (required)
+    // - cleanliness_rating: number
+    // - smell_rating: number
+    // - water_available: bool
+    // - safety_rating: number
+    // - hygiene_score: number (required)
+    // - photos: list of strings
+    // - comments: list of strings
+    //
+    // Collection: reviews
+    // - user_id: string (required)
+    // - toilet_id: string (required)
+    // - rating: number (required)
+    // - comment: string
+    // - timestamp: string (required, date-time)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['id', 'name', 'email', 'joined_date']) &&
+             data.id == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             isValidDateString(data.joined_date);
+    }
+
+    function isValidToilet(data) {
+      return hasOnlyAllowedFields(['name', 'latitude', 'longitude', 'cleanliness_rating', 'smell_rating', 'water_available', 'safety_rating', 'hygiene_score', 'photos', 'comments']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 200 &&
+             data.latitude is number && data.longitude is number &&
+             data.hygiene_score is number && data.hygiene_score >= 0 && data.hygiene_score <= 100 &&
+             (!('photos' in data) || (data.photos is list && data.photos.size() <= 10)) &&
+             (!('comments' in data) || (data.comments is list && data.comments.size() <= 100));
+    }
+
+    function isValidReview(data) {
+      return hasOnlyAllowedFields(['user_id', 'toilet_id', 'rating', 'comment', 'timestamp']) &&
+             data.user_id == request.auth.uid &&
+             data.toilet_id is string &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             isValidDateString(data.timestamp);
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
+    }
+
+    match /toilets/{toiletId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidToilet(request.resource.data);
+      allow update: if isAuthenticated() && isValidToilet(request.resource.data) && 
+                    request.resource.data.latitude == resource.data.latitude &&
+                    request.resource.data.longitude == resource.data.longitude;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update, delete: if isAuthenticated() && request.auth.uid == resource.data.user_id && isValidReview(request.resource.data);
+    }
+  }
+}

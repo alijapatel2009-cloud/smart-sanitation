@@ -1,0 +1,5 @@
+{
+  "name": "Hygiene Hub – Sanitation for All",
+  "description": "A community-driven platform to find and rate public sanitation facilities, ensuring hygiene for all.",
+  "requestFramePermissions": ["geolocation", "camera"]
+}
