@@ -15,6 +15,25 @@ async function startServer() {
     res.json({ status: "ok", message: "Backend is running!" });
   });
 
+  // Community Stats Endpoint
+  app.get("/api/stats", (req, res) => {
+    // In a real production app, this might query a database or cache
+    res.json({
+      totalUsers: 1250,
+      facilitiesMapped: 450,
+      countriesActive: 12,
+      lastUpdate: new Date().toISOString()
+    });
+  });
+
+  // Feedback Submission Endpoint
+  app.post("/api/feedback", express.json(), (req, res) => {
+    const { userId, message } = req.body;
+    console.log(`Feedback received from ${userId}: ${message}`);
+    // In a real app, you'd save this to a database or send an email
+    res.json({ success: true, message: "Thank you for your feedback!" });
+  });
+
   // Example AI endpoint (placeholder)
   app.post("/api/chat", express.json(), async (req, res) => {
     const { message } = req.body;

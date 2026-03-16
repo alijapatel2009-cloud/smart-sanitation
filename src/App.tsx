@@ -86,7 +86,10 @@ export default function App() {
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
+  const [selectedToilet, setSelectedToilet] = useState<Toilet | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"distance" | "score" | "name">("score");
 
   useEffect(() => {
     testConnection();
@@ -143,9 +146,18 @@ export default function App() {
     }
   };
 
-  const filteredToilets = toilets.filter(t => 
-    t.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredToilets = toilets
+    .filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === "score") return b.hygiene_score - a.hygiene_score;
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "distance" && userLocation) {
+        const distA = Math.sqrt(Math.pow(a.latitude - userLocation.lat, 2) + Math.pow(a.longitude - userLocation.lng, 2));
+        const distB = Math.sqrt(Math.pow(b.latitude - userLocation.lat, 2) + Math.pow(b.longitude - userLocation.lng, 2));
+        return distA - distB;
+      }
+      return 0;
+    });
 
   if (loading) {
     return (
@@ -186,6 +198,13 @@ export default function App() {
                   >
                     <VideoIcon className="w-5 h-5" />
                   </button>
+                  <button 
+                    onClick={() => setIsProfileOpen(true)}
+                    className="p-2 hover:bg-zinc-100 rounded-xl transition-colors text-zinc-400 hover:text-zinc-900"
+                    title="My Profile"
+                  >
+                    <UserIcon className="w-5 h-5" />
+                  </button>
                   <button onClick={handleLogout} className="p-2 hover:bg-zinc-100 rounded-xl transition-colors">
                     <LogOut className="w-5 h-5 text-zinc-400" />
                   </button>
@@ -207,7 +226,20 @@ export default function App() {
             {/* Main Content */}
             <main className="flex-1 px-6 pb-24 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">Nearby Facilities</h2>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setSortBy("score")}
+                    className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full transition-colors ${sortBy === "score" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-400"}`}
+                  >
+                    Top Rated
+                  </button>
+                  <button 
+                    onClick={() => setSortBy("distance")}
+                    className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full transition-colors ${sortBy === "distance" ? "bg-zinc-900 text-white" : "bg-zinc-100 text-zinc-400"}`}
+                  >
+                    Nearest
+                  </button>
+                </div>
                 <span className="text-xs text-zinc-400">{filteredToilets.length} found</span>
               </div>
 
@@ -222,7 +254,7 @@ export default function App() {
                 <div className="space-y-4">
                   {filteredToilets.map((toilet) => (
                     <React.Fragment key={toilet.id}>
-                      <ToiletCard toilet={toilet} />
+                      <ToiletCard toilet={toilet} onClick={() => setSelectedToilet(toilet)} />
                     </React.Fragment>
                   ))}
                 </div>
@@ -250,6 +282,20 @@ export default function App() {
               {isDemoModalOpen && (
                 <DemoVideoGenerator onClose={() => setIsDemoModalOpen(false)} />
               )}
+              {selectedToilet && (
+                <ToiletDetailModal 
+                  toilet={selectedToilet} 
+                  onClose={() => setSelectedToilet(null)}
+                  userName={user?.displayName || "Anonymous"}
+                />
+              )}
+              {isProfileOpen && (
+                <ProfileModal 
+                  user={user} 
+                  onClose={() => setIsProfileOpen(false)} 
+                  contributionCount={toilets.length} // Simplified
+                />
+              )}
             </AnimatePresence>
           </div>
         )}
@@ -259,6 +305,15 @@ export default function App() {
 }
 
 function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
+  const [stats, setStats] = useState<{ totalUsers: number, facilitiesMapped: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/stats')
+      .then(res => res.json())
+      .then(data => setStats(data))
+      .catch(err => console.error("Failed to fetch stats:", err));
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center bg-white">
       <motion.div 
@@ -270,9 +325,22 @@ function WelcomeScreen({ onLogin }: { onLogin: () => void }) {
           <MapPin className="text-white w-10 h-10" />
         </div>
         <h1 className="text-4xl font-bold tracking-tight mb-4 text-zinc-900">Hygiene Hub</h1>
-        <p className="text-zinc-500 max-w-xs mx-auto leading-relaxed">
+        <p className="text-zinc-500 max-w-xs mx-auto leading-relaxed mb-6">
           Ensuring safe and clean sanitation facilities are accessible to everyone, everywhere.
         </p>
+
+        {stats && (
+          <div className="flex gap-4 justify-center mb-8">
+            <div className="bg-zinc-50 px-4 py-2 rounded-2xl">
+              <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">Mapped</p>
+              <p className="text-sm font-bold">{stats.facilitiesMapped}+</p>
+            </div>
+            <div className="bg-zinc-50 px-4 py-2 rounded-2xl">
+              <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">Users</p>
+              <p className="text-sm font-bold">{stats.totalUsers}+</p>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       <motion.button
@@ -297,12 +365,13 @@ interface ToiletCardProps {
   toilet: Toilet;
 }
 
-function ToiletCard({ toilet }: ToiletCardProps) {
+function ToiletCard({ toilet, onClick }: { toilet: Toilet, onClick: () => void }) {
   return (
     <motion.div 
       layout
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
+      onClick={onClick}
       className="bg-white border border-zinc-100 p-5 rounded-3xl hover:border-zinc-200 transition-colors cursor-pointer group"
     >
       <div className="flex items-start justify-between mb-4">
@@ -343,6 +412,221 @@ function RatingBadge({ icon, label, active }: { icon: React.ReactNode, label: st
       {icon}
       <span className="text-[8px] font-bold uppercase tracking-tighter">{label}</span>
     </div>
+  );
+}
+
+function ToiletDetailModal({ toilet, onClose, userName }: { toilet: Toilet, onClose: () => void, userName: string }) {
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!comment.trim()) return;
+    setSubmitting(true);
+    try {
+      const { addCommentToToilet } = await import("./services/firebaseService");
+      await addCommentToToilet(toilet.id!, comment, userName);
+      setComment("");
+    } catch (error) {
+      console.error("Add comment error:", error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openInMaps = () => {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${toilet.latitude},${toilet.longitude}`, "_blank");
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-zinc-900/40 backdrop-blur-sm p-4"
+    >
+      <motion.div 
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className="w-full max-w-md bg-white rounded-[2.5rem] p-8 pb-10 shadow-2xl max-h-[90vh] overflow-y-auto no-scrollbar"
+      >
+        <div className="flex items-center justify-between mb-6 sticky top-0 bg-white z-10 py-2">
+          <h2 className="text-2xl font-bold tracking-tight">{toilet.name}</h2>
+          <button onClick={onClose} className="p-2 bg-zinc-50 rounded-full hover:bg-zinc-100 transition-colors">
+            <X className="w-5 h-5 text-zinc-400" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Photos */}
+          {toilet.photos.length > 0 && (
+            <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+              {toilet.photos.map((p, i) => (
+                <img key={i} src={p} className="w-full aspect-video rounded-3xl object-cover flex-shrink-0 border border-zinc-100" referrerPolicy="no-referrer" />
+              ))}
+            </div>
+          )}
+
+          {/* Ratings */}
+          <div className="grid grid-cols-4 gap-3">
+            <RatingBadge icon={<Droplets className="w-4 h-4" />} label="Water" active={toilet.water_available} />
+            <RatingBadge icon={<Wind className="w-4 h-4" />} label="Smell" active={toilet.smell_rating > 3} />
+            <RatingBadge icon={<ShieldCheck className="w-4 h-4" />} label="Safe" active={toilet.safety_rating > 3} />
+            <RatingBadge icon={<Plus className="w-4 h-4" />} label="Clean" active={toilet.cleanliness_rating > 3} />
+          </div>
+
+          {/* Action Buttons */}
+          <button 
+            onClick={openInMaps}
+            className="w-full py-4 bg-zinc-50 text-zinc-900 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-zinc-100 transition-colors"
+          >
+            <Navigation className="w-4 h-4" />
+            Get Directions
+          </button>
+
+          {/* Comments Section */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-zinc-400">Community Feedback</h3>
+            <div className="space-y-3">
+              {toilet.comments && toilet.comments.length > 0 ? (
+                toilet.comments.map((c, i) => {
+                  const [author, text] = c.split(": ");
+                  return (
+                    <div key={i} className="bg-zinc-50 p-4 rounded-2xl">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase mb-1">{author}</p>
+                      <p className="text-sm text-zinc-700">{text}</p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-zinc-400 italic">No comments yet. Be the first to share your experience!</p>
+              )}
+            </div>
+
+            <form onSubmit={handleAddComment} className="flex gap-2 mt-4">
+              <input 
+                type="text" 
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Add a comment..."
+                className="flex-1 bg-zinc-50 border-none rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-zinc-900/5 transition-all"
+              />
+              <button 
+                type="submit"
+                disabled={submitting || !comment.trim()}
+                className="bg-zinc-900 text-white p-3 rounded-xl disabled:opacity-50"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </form>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ProfileModal({ user, onClose, contributionCount }: { user: User | null, onClose: () => void, contributionCount: number }) {
+  const [feedback, setFeedback] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleSendFeedback = async () => {
+    if (!feedback.trim()) return;
+    setIsSending(true);
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.uid, message: feedback })
+      });
+      if (response.ok) {
+        setSent(true);
+        setFeedback("");
+      }
+    } catch (err) {
+      console.error("Failed to send feedback:", err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4"
+    >
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.9, opacity: 0 }}
+        className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl text-center max-h-[90vh] overflow-y-auto no-scrollbar"
+      >
+        <div className="flex justify-end mb-2">
+          <button onClick={onClose} className="p-2 bg-zinc-50 rounded-full hover:bg-zinc-100 transition-colors">
+            <X className="w-5 h-5 text-zinc-400" />
+          </button>
+        </div>
+
+        <div className="w-24 h-24 bg-zinc-50 rounded-full mx-auto mb-6 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
+          {user?.photoURL ? (
+            <img src={user.photoURL} alt={user.displayName || ""} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+          ) : (
+            <UserIcon className="w-10 h-10 text-zinc-200" />
+          )}
+        </div>
+
+        <h2 className="text-2xl font-bold tracking-tight mb-1">{user?.displayName || "Anonymous User"}</h2>
+        <p className="text-zinc-400 text-sm mb-8">{user?.email}</p>
+
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-zinc-50 p-4 rounded-3xl">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Contributions</p>
+            <p className="text-2xl font-bold text-zinc-900">{contributionCount}</p>
+          </div>
+          <div className="bg-zinc-50 p-4 rounded-3xl">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Status</p>
+            <p className="text-sm font-bold text-zinc-900">Active Scout</p>
+          </div>
+        </div>
+
+        <div className="mb-8 text-left">
+          <h3 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Send Feedback to Devs</h3>
+          {sent ? (
+            <div className="bg-emerald-50 text-emerald-600 p-4 rounded-2xl text-xs font-bold text-center">
+              Message sent! Thank you.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <textarea 
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="How can we improve?"
+                className="w-full bg-zinc-50 border-none rounded-2xl py-3 px-4 text-xs focus:ring-2 focus:ring-zinc-900/5 transition-all resize-none h-20"
+              />
+              <button 
+                onClick={handleSendFeedback}
+                disabled={isSending || !feedback.trim()}
+                className="w-full py-3 bg-zinc-100 text-zinc-900 rounded-2xl text-xs font-bold hover:bg-zinc-200 transition-colors disabled:opacity-50"
+              >
+                {isSending ? "Sending..." : "Send Message"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <button 
+          onClick={onClose}
+          className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-colors"
+        >
+          Close Profile
+        </button>
+      </motion.div>
+    </motion.div>
   );
 }
 

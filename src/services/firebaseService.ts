@@ -99,3 +99,18 @@ export const uploadToiletPhoto = async (file: File) => {
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
 };
+
+export const addCommentToToilet = async (toiletId: string, comment: string, userName: string) => {
+  const path = `toilets/${toiletId}`;
+  try {
+    const toiletRef = doc(db, 'toilets', toiletId);
+    const toiletSnap = await getDoc(toiletRef);
+    if (toiletSnap.exists()) {
+      const toiletData = toiletSnap.data() as Toilet;
+      const newComments = [...(toiletData.comments || []), `${userName}: ${comment}`];
+      await updateDoc(toiletRef, { comments: newComments });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+};
