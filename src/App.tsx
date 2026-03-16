@@ -15,7 +15,8 @@ import {
   AlertCircle,
   X,
   ChevronRight,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Video as VideoIcon
 } from "lucide-react";
 import { auth, googleProvider } from "./firebase";
 import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
@@ -27,6 +28,7 @@ import {
   testConnection 
 } from "./services/firebaseService";
 import { Toilet, UserProfile } from "./types";
+import DemoVideoGenerator from "./components/DemoVideoGenerator";
 
 // Error Boundary Component
 interface ErrorBoundaryProps {
@@ -83,6 +85,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -175,9 +178,18 @@ export default function App() {
                     <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold">Sanitation for All</p>
                   </div>
                 </div>
-                <button onClick={handleLogout} className="p-2 hover:bg-zinc-100 rounded-xl transition-colors">
-                  <LogOut className="w-5 h-5 text-zinc-400" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setIsDemoModalOpen(true)}
+                    className="p-2 hover:bg-zinc-100 rounded-xl transition-colors text-zinc-400 hover:text-zinc-900"
+                    title="Generate Demo Video"
+                  >
+                    <VideoIcon className="w-5 h-5" />
+                  </button>
+                  <button onClick={handleLogout} className="p-2 hover:bg-zinc-100 rounded-xl transition-colors">
+                    <LogOut className="w-5 h-5 text-zinc-400" />
+                  </button>
+                </div>
               </div>
 
               <div className="relative">
@@ -234,6 +246,9 @@ export default function App() {
                   onClose={() => setIsAddModalOpen(false)} 
                   userLocation={userLocation}
                 />
+              )}
+              {isDemoModalOpen && (
+                <DemoVideoGenerator onClose={() => setIsDemoModalOpen(false)} />
               )}
             </AnimatePresence>
           </div>
